@@ -1,8 +1,8 @@
-'''
+"""
 Modified by Augmented Startups 2021
 Face Landmark User Interface with StreamLit
 Watch Computer Vision Tutorials at www.augmentedstartups.info/youtube
-'''
+"""
 
 import streamlit as st
 import mediapipe as mp
@@ -36,8 +36,8 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-st.sidebar.title('FaceMes Sidebar')
-st.sidebar.subheader('parameters')
+st.sidebar.title('FaceMesh Sidebar')
+st.sidebar.subheader('Parameters')
 
 
 @st.cache()
@@ -84,10 +84,10 @@ if app_mode == 'About App':
 
         unsafe_allow_html=True,
     )
-    st.video('https://www.youtube.com/watch?v=BwYb5dQTbsA')
+    st.video('https://www.youtube.com/watch?v=TCUipOXuCBQ')
     st.markdown('''
         # About Me \n
-        Hey this is **Ritesh Kanjee** from **Augmented Startups**. \n
+        Hey this is **Diego Rojas** from **UNIFRANZ**. \n
         
         If you are interested in building more Computer Vision apps like this one the visit the **Vision Store** at
         www.augmentedstartups.info/visionstore \n
