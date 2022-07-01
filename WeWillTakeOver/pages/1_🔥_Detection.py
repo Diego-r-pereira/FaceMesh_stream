@@ -8,7 +8,7 @@ mp_drawing = mp.solutions.drawing_utils
 mp_face_mesh = mp.solutions.face_mesh
 
 # DEMO_IMAGE = 'demo.jpg'
-DEMO_VIDEO = 'images/demo.mp4'
+DEMO_VIDEO = './images/demo.mp4'
 
 @st.cache
 def image_resize(image, width=None, height=None, inter=cv2.INTER_AREA):

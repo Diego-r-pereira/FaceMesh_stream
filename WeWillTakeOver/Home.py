@@ -2,7 +2,7 @@ import streamlit as st
 
 st.title('We Will Take Over :fire:')
 
-image = "images/two_raccoons.gif"
+image = "./images/two_raccoons.gif"
 st.image(image, caption='Fire Detection by Computer Vision')
 
 st.markdown('''
