@@ -1,14 +1,15 @@
 import streamlit as st
-import mediapipe as mp
+#import mediapipe as mp
 import cv2
-import tempfile
-import time
+#import tempfile
+#import time
+import detect_py35 as dt
 
-mp_drawing = mp.solutions.drawing_utils
-mp_face_mesh = mp.solutions.face_mesh
+# picture = st.camera_input("Take a picture")
 
-# DEMO_IMAGE = 'demo.jpg'
-DEMO_VIDEO = './images/demo.mp4'
+# if picture:
+#     st.image(picture)
+# dt.run()
 
 @st.cache
 def image_resize(image, width=None, height=None, inter=cv2.INTER_AREA):
@@ -31,123 +32,88 @@ def image_resize(image, width=None, height=None, inter=cv2.INTER_AREA):
 
     return resized
 
-st.set_option('deprecation.showfileUploaderEncoding', False)
-
-use_webcam = st.sidebar.button('Use Webcam')
-record = st.sidebar.checkbox("Recorded Video")
-
-if record:
-    st.checkbox("Recording", value=True)
-
-max_faces = st.sidebar.number_input('Maximum Number of Face', value=5, min_value=1)
-st.sidebar.markdown('---')
-
-detection_confidence = st.sidebar.slider('Min Detection Confidence', min_value=0.0, max_value=1.0, value=0.5)
-tracking_confidence = st.sidebar.slider('Min Tracking Confidence', min_value=0.0, max_value=1.0, value=0.5)
-st.sidebar.markdown('---')
-
-st.markdown("## Output")
-
 stframe = st.empty()
-video_file_buffer = st.sidebar.file_uploader("Upload a Video", type=['mp4', 'mov', 'avi', 'asf', 'm4v'])
-tffile = tempfile.NamedTemporaryFile(delete=False)
 
-## We get our input video here
-if not video_file_buffer:
-    if use_webcam:
-        vid = cv2.VideoCapture(0)
-    else:
-        vid = cv2.VideoCapture(DEMO_VIDEO)
-        tffile.name = DEMO_VIDEO
-else:
-    tffile.write(video_file_buffer.read())
-    vid = cv2.VideoCapture(tffile.name)
 
-width = int(vid.get(cv2.CAP_PROP_FRAME_WIDTH))
-height = int(vid.get(cv2.CAP_PROP_FRAME_HEIGHT))
-fps_input = int(vid.get(cv2.CAP_PROP_FPS))
+def run():
+    """ Detects a target by using color range segmentation. """
 
-#Recording Part
-codec = cv2.VideoWriter_fourcc('M', 'J', 'P', 'G')
-out = cv2.VideoWriter('output1.mp4', codec, fps_input, (width, height))
+    # Open the video camera
+    vid_cam = cv2.VideoCapture(0)
 
-st.sidebar.text('Input Video')
-st.sidebar.video(tffile.name)
+    # Check if the camera opened correctly
+    if vid_cam.isOpened() is False:
+        print('[ERROR] Couldnt open the camera.')
+        return
 
-fps = 0
-i = 0
+    print('-- Camera opened successfully')
 
-drawing_spec = mp_drawing.DrawingSpec(thickness=2, circle_radius=1)
+    # Compute general parameters
+    dt.get_cam_params(vid_cam)
+    # print(f"-- Original image width, height: {dt.params['image_width']}, {dt.params['image_height']}")
 
-kpi1, kpi2, kpi3 = st.columns(3)
+    # Infinite detect-follow loop
+    while True:
+        # Get the target coordinates (if any target was detected)
+        tgt_cam_coord, frame, contour = dt.get_target_coordinates(vid_cam)
 
-with kpi1:
-    st.markdown("**Frame Rate**")
-    kpi1_text = st.markdown("0")
+        # print('-- break point 1')
+        # If a target was found, filter their coordinatesq
+        if tgt_cam_coord['width'] is not None and tgt_cam_coord['height'] is not None:
+            # Apply Moving Average filter to target camera coordinates
+            tgt_filt_cam_coord = dt.moving_average_filter(tgt_cam_coord)
 
-with kpi2:
-    st.markdown("**Detected Faces**")
-    kpi2_text = st.markdown("0")
+        # No target was found, set target camera coordinates to the Cartesian origin,
+        # so the drone doesn't move
+        else:
+            # The Cartesian origin is where the x and y Cartesian axes are located
+            # in the image, in pixel units
+            tgt_cam_coord = {'width': dt.params['y_axe_pos'],
+                             'height': dt.params['x_axe_pos']}  # Needed just for drawing objects
+            tgt_filt_cam_coord = {'width': dt.params['y_axe_pos'], 'height': dt.params['x_axe_pos']}
 
-with kpi3:
-    st.markdown("**Image Width**")
-    kpi3_text = st.markdown("0")
+        # Convert from camera coordinates to Cartesian coordinates (in pixel units)
+        tgt_cart_coord = {'x': (tgt_filt_cam_coord['width'] - dt.params['y_axe_pos']),
+                          'y': (dt.params['x_axe_pos'] - tgt_filt_cam_coord['height'])}
 
-st.markdown("<hr/>", unsafe_allow_html=True)
+        # Compute scaling conversion factor from camera coordinates in pixel units
+        # to Cartesian coordinates in meters
+        COORD_SYS_CONV_FACTOR = 0.1
 
-## Face Mesh Predictor
-with mp_face_mesh.FaceMesh(
-    max_num_faces = max_faces,
-    min_detection_confidence=detection_confidence,
-    min_tracking_confidence= tracking_confidence
-) as face_mesh:
-    prevTime = 0
+        # If the target is outside the center rectangle, compute North and East coordinates 
+        if abs(tgt_cart_coord['x']) > dt.params['cent_rect_half_width'] or \
+                abs(tgt_cart_coord['y']) > dt.params['cent_rect_half_height']:
+            # Compute North, East coordinates applying "camera pixel" to Cartesian conversion factor
+            E_coord = tgt_cart_coord['x'] * COORD_SYS_CONV_FACTOR
+            N_coord = tgt_cart_coord['y'] * COORD_SYS_CONV_FACTOR
+            # D_coord, yaw_angle don't change
 
-    while vid.isOpened():
-        i += 1
-        ret, frame = vid.read()
-        if not ret:
-            continue
+        # Draw objects over the detection image frame just for visualization
+        frame = dt.draw_objects(tgt_cam_coord, tgt_filt_cam_coord, frame, contour)
+
+        # Show the detection image frame on screen
+        cv2.imshow("Detection of fire", frame)
+
+        # my_placeholder = st.empty()
+        # my_placeholder.image(frame, use_column_width=True)
+
+        # st.write(frame.shape)
+        # st.image(my_placeholder)
 
         # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = face_mesh.process(frame)
-        frame.flags.writeable = True
-        # frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-
-        face_count = 0
-        if results.multi_face_landmarks:
-            # Face Landmark Drawing
-            for face_landmarks in results.multi_face_landmarks:
-                face_count += 1
-
-                mp_drawing.draw_landmarks(
-                    image=frame,
-                    landmark_list=face_landmarks,
-                    connections=mp_face_mesh.FACEMESH_CONTOURS,
-                    landmark_drawing_spec=drawing_spec,
-                    connection_drawing_spec=drawing_spec)
-
-        #FPS Counter Logic
-        currTime = time.time()
-        fps = 1/(currTime - prevTime)
-        prevTime = currTime
-
-        if record:
-            out.write(frame)
-
-        # Dashboard
-        kpi1_text.write(f"<h1 style='text-align: center; color: red;'>{int(fps)}</h1>", unsafe_allow_html=True)
-        kpi2_text.write(f"<h1 style='text-align: center; color: red;'>{face_count}</h1>", unsafe_allow_html=True)
-        kpi3_text.write(f"<h1 style='text-align: center; color: red;'>{width}</h1>", unsafe_allow_html=True)
-
-        frame = cv2.resize(frame, (0, 0), fx=0.8, fy=0.8)
-        frame = image_resize(image=frame, width=640)
+        # st.image(frame)
+        # st.write(frame)
+        
+        # frame = cv2.resize(frame, (0, 0), fx=0.8, fy=0.8)
+        # frame = image_resize(image=frame, width=640)
         stframe.image(frame, channels = 'BGR', use_column_width = True)
 
-    # results = face_mesh.process(image)
-    # out_image = image.copy()
+        # Catch aborting key from computer keyboard
+        key = cv2.waitKey(1) & 0xFF
+        # If the 'q' key is pressed, break the 'while' infinite loop
+        if key == ord("q"):
+            break
 
-    st.subheader('Output Image')
-    # st.image(out_image, use_column_width=True)
+    print("The script has ended.")
 
-# face_count = 0
+run()
