@@ -1,15 +1,6 @@
 import streamlit as st
-#import mediapipe as mp
 import cv2
-#import tempfile
-#import time
 import detect_py35 as dt
-
-# picture = st.camera_input("Take a picture")
-
-# if picture:
-#     st.image(picture)
-# dt.run()
 
 @st.cache
 def image_resize(image, width=None, height=None, inter=cv2.INTER_AREA):
